@@ -1,56 +1,32 @@
 module ActiveAdmin
   module Xls
     module ResourceControllerExtension
-      def self.included(base)
-        base.send :alias_method_chain, :per_page, :xls
-        base.send :alias_method_chain, :index, :xls
-        base.send :alias_method_chain, :rescue_active_admin_access_denied, :xls
+      def self.prepended(base)
         base.send :respond_to, :xls
       end
 
       def index_with_xls
-        index_without_xls do |format|
+        super do |format|
+          block.call format if block_given?
+
           format.xls do
-            xls_collection = if method(:find_collection).arity.zero?
-                               collection
-                             else
-                               find_collection except: :pagination
-                             end
-            xls = active_admin_config.xls_builder.serialize(
-              xls_collection,
-              view_context
-            )
+            xls = active_admin_config.xls_builder.serialize(collection, view_context)
             send_data(xls,
                       filename: xls_filename,
                       type: Mime::Type.lookup_by_extension(:xls))
           end
-
-          yield(format) if block_given?
-        end
-      end
-
-      def rescue_active_admin_access_denied_with_xls(exception)
-        if request.format == Mime::Type.lookup_by_extension(:xls)
-          respond_to do |format|
-            format.xls do
-              flash[:error] = "#{exception.message} Review download_links in initializers/active_admin.rb"
-              redirect_backwards_or_to_root
-            end
-          end
-        else
-          rescue_active_admin_access_denied_without_xls(exception)
         end
       end
 
       # patch per_page to use the CSV record max for pagination
       # when the format is xls
-      def per_page_with_xls
+      def per_page
         if request.format == Mime::Type.lookup_by_extension(:xls)
           return max_per_page if respond_to?(:max_per_page, true)
           active_admin_config.max_per_page
         end
 
-        per_page_without_xls
+        super
       end
 
       # Returns a filename for the xls file using the collection_name
